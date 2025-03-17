@@ -31,6 +31,7 @@ interface Proposal {
   description: string
   category: string
   deadline: number
+  createdAt: number
   upvotes: number
   downvotes: number
   finalized: boolean
@@ -105,6 +106,7 @@ export default function ProposalDetailPage() {
         }
         
         setProposal(foundProposal)
+        console.log("Proposal from fetchProposal", foundProposal);
         
         // Check if the user has already voted
         if (account && contract) {
@@ -195,7 +197,9 @@ export default function ProposalDetailPage() {
         setIsVoting(false)
       })
   }
-
+  if (proposal) {
+    console.log("Upvotes=", proposal.upvotes);
+  }
   const handleFinalize = () => {
     if (!isConnected || !contract || !proposal || !isGovernment || !isExpired || proposal.finalized) return
 
@@ -244,7 +248,7 @@ export default function ProposalDetailPage() {
       day: "numeric",
     });
   };
-  const PROPOSAL_DURATION = 7 * 24 * 60 * 60;
+  
   return (
     <div className="container py-8">
       <Button variant="ghost" asChild className="mb-6 flex items-center gap-2">
@@ -299,12 +303,12 @@ export default function ProposalDetailPage() {
             <div className="mb-8 grid gap-4 sm:grid-cols-2">
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Calendar className="h-4 w-4" />
-                <span>Created: {new Date((proposal.deadline - 604800) * 1000).toLocaleString()}</span>
+                <span>Created: {formatDate(proposal.createdAt)}</span>
                 </div>
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <User className="h-4 w-4" />
                 <span>
-                  Proposer: {proposal.proposer ? proposal.proposer : proposal.proposer}
+                  Proposer: {proposal.proposer ? proposal.proposer : "0xB0a1722B74d71a82c1BcFF77a29Bd80D43B2bF3e"}
                 </span>
               </div>
             </div>

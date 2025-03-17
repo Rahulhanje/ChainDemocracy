@@ -8,6 +8,7 @@ contract VotingSystem {
         string description;
         string category;
         uint256 deadline;
+        uint256 createdAt;
         uint256 upvotes;
         uint256 downvotes;
         bool finalized;
@@ -18,6 +19,7 @@ contract VotingSystem {
     mapping(uint256 => mapping(address => bool)) public hasVoted;
     uint256 public proposalCount;
     address public government;
+    uint256 public constant MAX_DURATION = 365 days; // Maximum voting duration
 
     event ProposalCreated(
         uint256 indexed id,
@@ -25,11 +27,12 @@ contract VotingSystem {
         string description,
         string category,
         uint256 deadline,
+        uint256 createdAt,
         address proposer
     );
 
     event Voted(uint256 indexed proposalId, address indexed voter, bool voteType);
-    event ProposalFinalized(uint256 indexed proposalId, string result);
+    event ProposalFinalized(uint256 indexed proposalId, bool result);
 
     modifier onlyGovernment() {
         require(msg.sender == government, "Only government can perform this action");
@@ -52,6 +55,11 @@ contract VotingSystem {
         string memory _category,
         uint256 _duration
     ) public onlyGovernment {
+        require(_duration > 0 && _duration <= MAX_DURATION, "Invalid duration");
+        require(bytes(_title).length > 0 && bytes(_title).length <= 256, "Title length must be between 1 and 256");
+        require(bytes(_description).length > 0 && bytes(_description).length <= 1024, "Description length must be between 1 and 1024");
+        require(bytes(_category).length > 0 && bytes(_category).length <= 128, "Category length must be between 1 and 128");
+
         proposalCount++;
         uint256 deadline = block.timestamp + _duration;
 
@@ -61,13 +69,14 @@ contract VotingSystem {
             description: _description,
             category: _category,
             deadline: deadline,
+            createdAt: block.timestamp,
             upvotes: 0,
             downvotes: 0,
             finalized: false,
             proposer: msg.sender
         });
 
-        emit ProposalCreated(proposalCount, _title, _description, _category, deadline, msg.sender);
+        emit ProposalCreated(proposalCount, _title, _description, _category, deadline, block.timestamp, msg.sender);
     }
 
     function vote(uint256 proposalId, bool voteType) public validProposal(proposalId) {
@@ -76,7 +85,7 @@ contract VotingSystem {
         require(!hasVoted[proposalId][msg.sender], "You have already voted");
 
         hasVoted[proposalId][msg.sender] = true;
-        
+
         if (voteType) {
             proposal.upvotes++;
         } else {
@@ -92,7 +101,7 @@ contract VotingSystem {
         require(!proposal.finalized, "Proposal already finalized");
 
         proposal.finalized = true;
-        string memory result = proposal.upvotes > proposal.downvotes ? "Accepted" : "Rejected";
+        bool result = proposal.upvotes > proposal.downvotes;
 
         emit ProposalFinalized(proposalId, result);
     }
@@ -102,9 +111,11 @@ contract VotingSystem {
         string memory description,
         string memory category,
         uint256 deadline,
+        uint256 createdAt,
         uint256 upvotes,
         uint256 downvotes,
-        bool finalized
+        bool finalized,
+        address proposer
     ) {
         Proposal memory proposal = proposals[proposalId];
         return (
@@ -112,9 +123,11 @@ contract VotingSystem {
             proposal.description,
             proposal.category,
             proposal.deadline,
+            proposal.createdAt,
             proposal.upvotes,
             proposal.downvotes,
-            proposal.finalized
+            proposal.finalized,
+            proposal.proposer
         );
     }
 }

@@ -1,5 +1,6 @@
 import { ethers } from "ethers";
 import abi from "./abi.json";
+import { Main } from "next/document";
 
 // Extend the Window interface to include the ethereum property
 declare global {
@@ -92,65 +93,43 @@ interface Proposal {
     description: string;
     category: string;
     deadline: number;
+    createdAt: number;
     upvotes: number;
     downvotes: number;
     finalized: boolean;
 }
 
-export const getAllProposals = async (): Promise<Proposal[]> => {
-    try {
-        const contract = await getContract(); // Get the contract instance
-
-        // Get the total number of proposals
-        const proposalCount: bigint = await contract.proposalCount();
-        const totalProposals = Number(proposalCount);
-
-        console.log(`Total Proposals: ${totalProposals}\n`);
-
-        const proposals: Proposal[] = [];
-
-        for (let i = 1; i <= totalProposals; i++) {
-            const proposal: [string, string, string, bigint, bigint, bigint, boolean] =
-                await contract.getProposal(i);
-
-            const formattedProposal: Proposal = {
-                id: i,
-                title: proposal[0],
-                description: proposal[1],
-                category: proposal[2],
-                deadline: Number(proposal[3]), // Convert BigInt to Number
-                upvotes: Number(proposal[4]),
-                downvotes: Number(proposal[5]),
-                finalized: proposal[6], // Boolean
-            };
-
-            proposals.push(formattedProposal);
-        }
-
-        // Neatly print proposals
-        console.log("All Proposals:");
-        proposals.forEach((proposal) => {
-            console.log(`
---------------------------------
-📌 Proposal ID: ${proposal.id}
-📝 Title: ${proposal.title}
-📄 Description: ${proposal.description}
-🏷️ Category: ${proposal.category}
-⏳ Deadline: ${new Date(proposal.deadline * 1000).toLocaleString()}
-👍 Upvotes: ${proposal.upvotes}
-👎 Downvotes: ${proposal.downvotes}
-✅ Finalized: ${proposal.finalized ? "Yes" : "No"}
---------------------------------
-`);
-        });
-
-        return proposals;
-    } catch (error) {
-        console.error("Error fetching proposals:", error);
-        const provider = new ethers.BrowserProvider((window as any).ethereum);
-        return []; // Return an empty array in case of an error
+export async function getAllProposals() {
+    const contract = await getContract();
+    const count = await contract.proposalCount();
+    const proposals = [];
+    
+    for (let id = 1; id <= Number(count); id++) {
+      try {
+        const proposal = await contract.getProposal(id);
+        
+        // Ensuring we use the correct indexes that match the first file
+        const formattedProposal = {
+          id: id,
+          title: proposal[0],
+          description: proposal[1],
+          category: proposal[2],
+          deadline: Number(proposal[3]),
+          createdAt: Number(proposal[4]),  // Make sure this matches the index in the first file
+          upvotes: Number(proposal[5]),    // Make sure this matches the index in the first file
+          downvotes: Number(proposal[6]),
+          finalized: proposal[7],
+          proposer: proposal[8],
+        };
+        
+        proposals.push(formattedProposal);
+      } catch (error) {
+        console.error(`Error fetching proposal ID ${id}:`, error);
+      }
     }
-};
+    
+    return proposals;
+  }
 
 export const getProposal = async (proposalId: number) => {
     try {
@@ -168,22 +147,26 @@ export const getProposal = async (proposalId: number) => {
 
         // Format and return proposal data
         const formattedProposal = {
-            title: proposal[0],
-            description: proposal[1],
-            category: proposal[2],
-            deadline: Number(proposal[3]), // Convert BigInt to Number
-            upvotes: Number(proposal[4]),
-            downvotes: Number(proposal[5]),
-            finalized: proposal[6] // Boolean value, no conversion needed
+                        title: proposal[0],
+                        description: proposal[1],
+                        category: proposal[2],
+                        deadline: Number(proposal[3]),
+                        createdAt: Number(proposal[4]),
+                        upvotes: Number(proposal[5]),
+                        downvotes: Number(proposal[6]),
+                        finalized: proposal[7],
+                        proposer: proposal[8], // Boolean value, no conversion needed
         };
 
-        console.log("Proposal:", formattedProposal);
+        console.log("Proposals:", formattedProposal);
+        console.log("upvotes from contract", formattedProposal.upvotes);
         return formattedProposal;
     } catch (error) {
         console.error("Error fetching proposal:", error);
         return null;
     }
 };
+
 
 
 export const hasVoted = async (proposalId: number, voter: string): Promise<boolean> => {

@@ -557,8 +557,8 @@
 // }
 
 'use client'
-import { useState } from "react";
-import { createProposal } from "@/lib/contract";
+import { use, useEffect, useState } from "react";
+import { createProposal, getProposal } from "@/lib/contract";
 
 export default function ProposalForm() {
     const [form, setForm] = useState({
@@ -591,7 +591,10 @@ export default function ProposalForm() {
           alert("Failed to submit proposal");
       }
   };
-  
+
+    useEffect(() => {
+        getProposal(1);
+    }, []);
 
     return (
         <div className="max-w-md mx-auto p-4 border rounded-lg shadow-lg">

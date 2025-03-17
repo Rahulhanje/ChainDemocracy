@@ -25,8 +25,9 @@ export function VotingProgress({
   if (compact) {
     return (
       <div className={cn("flex flex-col gap-1", className)}>
-        <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+        <div className="h-2 w-full overflow-hidden rounded-full bg-muted flex">
           <div className="h-full bg-success" style={{ width: `${upPercentage}%` }} />
+          <div className="h-full bg-destructive" style={{ width: `${downPercentage}%` }} />
         </div>
         <div className="flex items-center justify-between text-xs">
           <div className="flex items-center gap-1">
@@ -63,4 +64,3 @@ export function VotingProgress({
     </div>
   )
 }
-

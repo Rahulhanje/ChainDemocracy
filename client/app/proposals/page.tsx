@@ -16,9 +16,11 @@ interface Proposal {
     description: string
     category: string
     deadline: number
+    createdAt: number
     upvotes: number
     downvotes: number
     finalized: boolean
+    proposer: string
 }
 
 export default function ProposalsPage() {
@@ -37,43 +39,65 @@ export default function ProposalsPage() {
     const [contract, setContract] = useState<ethers.Contract | null>(null);
 
     async function initializeContract() {
-        const contractInstance = await getContract();
-        const c= await contractInstance.proposalCount();
-        setCount(c);
-        setContract(contractInstance);
+        try {
+            const contractInstance = await getContract();
+            const c = await contractInstance.proposalCount();
+            // Convert BigNumber to number
+            setCount(Number(c));
+            setContract(contractInstance);
+        } catch (error) {
+            console.error("Failed to initialize contract:", error);
+            setError("Failed to connect to the blockchain. Please try again later.");
+            setIsLoading(false);
+        }
     }
 
-    const fetchProposals = async () => {
-        const totalProposals =count ; // Change this to the actual count
-        const proposals: Proposal[] = [];
-        for (let id = 1; id <= totalProposals; id++) {
-          try {
+   const fetchProposals = async () => {
+        try {
             if (!contract) {
                 console.error("Contract is not initialized");
                 return;
             }
-            const proposal = await contract.getProposal(id);
-            const formattedProposal = {
-              id: id,
-              title: proposal[0],
-              description: proposal[1],
-              category: proposal[2],
-              deadline: Number(proposal[3]),
-              upvotes: Number(proposal[4]),
-              downvotes: Number(proposal[5]),
-              finalized: proposal[6],
-            };
-             proposals.push(formattedProposal);
-            console.log(`Proposal ID ${id}:`, formattedProposal);
-          } catch (error) {
-            console.error(`Error fetching proposal ID ${id}:`, error);
-          }
+            
+            const totalProposals = count;
+            const proposals: Proposal[] = [];
+            
+            for (let id = 1; id <= totalProposals; id++) {
+                try {
+                    const proposal = await contract.getProposal(id);
+                    
+                    // Explicitly convert BigNumber values to JavaScript numbers
+                    console.log("proposal from i need ", proposal);
+                    const formattedProposal = {
+                        id: id,
+                        title: proposal[0],
+                        description: proposal[1],
+                        category: proposal[2],
+                        deadline: Number(proposal[3]),
+                        createdAt: Number(proposal[4]),
+                        upvotes: Number(proposal[5]),
+                        downvotes: Number(proposal[6]),
+                        finalized: proposal[7],
+                        proposer: proposal[8],
+                    };
+                    
+                    console.log("upvotes from page", formattedProposal.upvotes);
+                    proposals.push(formattedProposal);
+                    console.log(`Proposal ID ${id}:`, formattedProposal);
+                } catch (error) {
+                    console.error(`Error fetching proposal ID ${id}:`, error);
+                }
+            }
+            
+            console.log("Fetched proposals:", proposals);
+            setProposals(proposals);
+        } catch (error) {
+            console.error("Error fetching proposals:", error);
+            setError("Failed to load proposals. Please try again later.");
+        } finally {
+            setIsLoading(false);
         }
-        console.log("Fetched proposals:", proposals);
-        setProposals(proposals);
-        setIsLoading(false);
-        
-      };
+    };
 
     useEffect(() => {
         initializeContract();
@@ -160,7 +184,6 @@ export default function ProposalsPage() {
     }) => {
         setFilters(newFilters)
     }
-
     return (
         <div className="container py-8">
             <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
