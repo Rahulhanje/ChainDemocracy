@@ -25,9 +25,9 @@ interface ProposalCardProps {
   }
 }
 
-export async function ProposalCard({ proposal }: ProposalCardProps) {
-  const {  account, isConnected, connectWallet, disconnectWallet } = useWallet()
-  const[contract, setContract] = useState<ethers.Contract | null>(null);
+export function ProposalCard({ proposal }: ProposalCardProps) {
+  const { isConnected } = useWallet()
+  const [contract, setContract] = useState<ethers.Contract | null>(null)
   const [isVoting, setIsVoting] = useState(false)
   const [hasVoted, setHasVoted] = useState(false)
   const [voteError, setVoteError] = useState<string | null>(null)
@@ -36,15 +36,20 @@ export async function ProposalCard({ proposal }: ProposalCardProps) {
   const totalVotes = proposal.upvotes + proposal.downvotes
   const result = proposal.upvotes > proposal.downvotes ? "Accepted" : "Rejected"
 
-
-  async function logContractInstance() {
-    const contract = await getContract();
-    setContract(contract);
-  }
-
   useEffect(() => {
-    logContractInstance();
-  }, []);
+    // Move the async logic inside useEffect
+    const initContract = () => {
+      getContract()
+        .then(contractInstance => {
+          setContract(contractInstance)
+        })
+        .catch(err => {
+          console.error("Failed to get contract:", err)
+        })
+    }
+
+    initContract()
+  }, [])
 
   const getCategoryIcon = (category: string) => {
     switch (category.toLowerCase()) {
@@ -67,23 +72,26 @@ export async function ProposalCard({ proposal }: ProposalCardProps) {
     }
   }
 
-  const handleVote = async (voteType: boolean) => {
+  const handleVote = (voteType: boolean) => {
     if (!isConnected || !contract || isExpired || proposal.finalized) return
 
-    try {
-      setIsVoting(true)
-      setVoteError(null)
+    setIsVoting(true)
+    setVoteError(null)
 
-      const tx = await contract.vote(proposal.id, voteType)
-      await tx.wait()
-
-      setHasVoted(true)
-    } catch (error: any) {
-      console.error("Error voting:", error)
-      setVoteError(error.message || "Failed to vote. You may have already voted.")
-    } finally {
-      setIsVoting(false)
-    }
+    contract.vote(proposal.id, voteType)
+      .then((tx: any) => {
+        return tx.wait()
+      })
+      .then(() => {
+        setHasVoted(true)
+      })
+      .catch((error: any) => {
+        console.error("Error voting:", error)
+        setVoteError(error.message || "Failed to vote. You may have already voted.")
+      })
+      .finally(() => {
+        setIsVoting(false)
+      })
   }
 
   return (
@@ -151,4 +159,3 @@ export async function ProposalCard({ proposal }: ProposalCardProps) {
     </Card>
   )
 }
-

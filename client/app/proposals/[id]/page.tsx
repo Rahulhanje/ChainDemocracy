@@ -22,7 +22,8 @@ import {
 } from "lucide-react"
 import Link from "next/link"
 import { useWallet } from "@/hooks/WalletContext"
-import { getAllProposals, getContract } from "@/lib/contract"
+import { getAllProposals, getContract, getIsGovernment } from "@/lib/contract"
+import { ethers } from "ethers"
 
 interface Proposal {
   id: number
@@ -36,14 +37,12 @@ interface Proposal {
   proposer: string
 }
 
-export default async function ProposalDetailPage() {
+export default function ProposalDetailPage() {
   const params = useParams()
   const router = useRouter()
   const { isConnected, account } = useWallet()
-  const contract=await getContract();
-  //
-
-  const isGovernment=true;
+  const [contract, setContract] = useState<ethers.Contract | null>(null)
+  const [isGovernment, setIsGovernment] = useState(false)
   const [proposal, setProposal] = useState<Proposal | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -58,40 +57,75 @@ export default async function ProposalDetailPage() {
   const totalVotes = proposal ? proposal.upvotes + proposal.downvotes : 0
   const result = proposal && proposal.upvotes > proposal.downvotes ? "Accepted" : "Rejected"
 
-  const fetchProposal = async () => {
+  // Initialize contract
+  useEffect(() => {
+    const initializeContract = () => {
+      getContract()
+        .then(contractInstance => {
+          setContract(contractInstance)
+          console.log("Contract Instance from ProposalDetailPage:", contractInstance)
+          
+          return getIsGovernment()
+        })
+        .then(governmentStatus => {
+          setIsGovernment(governmentStatus ?? false)
+          console.log("Is Government:", governmentStatus)
+        })
+        .catch(error => {
+          console.error("Error initializing contract:", error)
+        })
+    }
+
+    initializeContract()
+  }, [])
+
+  // Fetch proposal data
+  const fetchProposal = () => {
     if (!contract) return
 
-    try {
-      setIsLoading(true)
-      setError(null)
+    setIsLoading(true)
+    setError(null)
 
-      // Check if the proposal exists
-      const count = await contract.proposalCount()
-      if (proposalId <= 0 || proposalId > count) {
-        setError("Proposal not found")
-        return
-      }
-
-      // Get proposal details
-      const proposalData = await getAllProposals();
-      const proposal = proposalData.find((p) => p.id === proposalId) as Proposal
-      if (!proposal) {
-        setError("Proposal not found")
-        return
-      }
-      setProposal(proposal)
-
-      // Check if the user has already voted
-      if (account) {
-        const voted = await contract.hasVoted(proposalId, account)
-        setHasVoted(voted)
-      }
-    } catch (error: any) {
-      console.error("Error fetching proposal:", error)
-      setError("Failed to load proposal details. Please try again later.")
-    } finally {
-      setIsLoading(false)
-    }
+    // Check if the proposal exists
+    contract.proposalCount()
+      .then(count => {
+        if (proposalId <= 0 || proposalId > count) {
+          setError("Proposal not found")
+          return Promise.reject("Proposal not found")
+        }
+        
+        // Get proposal details
+        return getAllProposals()
+      })
+      .then(proposalData => {
+        const foundProposal = proposalData.find((p) => p.id === proposalId) as Proposal
+        if (!foundProposal) {
+          setError("Proposal not found")
+          return Promise.reject("Proposal not found")
+        }
+        
+        setProposal(foundProposal)
+        
+        // Check if the user has already voted
+        if (account && contract) {
+          return contract.hasVoted(proposalId, account)
+        }
+        return false
+      })
+      .then(voted => {
+        if (voted !== undefined) {
+          setHasVoted(voted)
+        }
+      })
+      .catch(error => {
+        if (error !== "Proposal not found") {
+          console.error("Error fetching proposal:", error)
+          setError("Failed to load proposal details. Please try again later.")
+        }
+      })
+      .finally(() => {
+        setIsLoading(false)
+      })
   }
 
   useEffect(() => {
@@ -100,66 +134,87 @@ export default async function ProposalDetailPage() {
     }
   }, [contract, proposalId, account])
 
-  const handleVote = async (voteType: boolean) => {
+  // Listen for vote events from the smart contract
+  useEffect(() => {
+    if (!contract) return
+
+    // Create event listener for vote events
+    const voteEventFilter = contract.filters.Voted()
+    
+    const handleVoteEvent = (proposalId: number, voter: string, support: boolean) => {
+      // Only update the UI if it's a vote for the current proposal
+      if (Number(proposalId) === Number(params.id)) {
+        console.log("Vote detected for current proposal, refreshing data...")
+        fetchProposal()
+      }
+    }
+
+    // Add event listener
+    contract.on(voteEventFilter, handleVoteEvent)
+
+    // Clean up event listener when component unmounts
+    return () => {
+      contract.off(voteEventFilter, handleVoteEvent)
+    }
+  }, [contract, params.id])
+
+  const handleVote = (voteType: boolean) => {
     if (!isConnected || !contract || !proposal || isExpired || proposal.finalized) return
 
-    try {
-      setIsVoting(true)
-      setVoteError(null)
+    setIsVoting(true)
+    setVoteError(null)
 
-      const tx = await contract.vote(proposalId, voteType)
-      await tx.wait()
-
-      setHasVoted(true)
-      fetchProposal() // Refresh data
-    } catch (error: any) {
-      console.error("Error voting:", error)
-      setVoteError(error.message || "Failed to vote. You may have already voted.")
-    } finally {
-      setIsVoting(false)
-    }
+    contract.vote(proposalId, voteType)
+      .then(tx => {
+        console.log("Vote transaction submitted:", tx.hash)
+        return tx.wait()
+      })
+      .then(receipt => {
+        console.log("Vote transaction confirmed:", receipt)
+        setHasVoted(true)
+        
+        // Optimistically update the UI while waiting for blockchain confirmation
+        if (proposal) {
+          const updatedProposal = { ...proposal }
+          if (voteType) {
+            updatedProposal.upvotes += 1
+          } else {
+            updatedProposal.downvotes += 1
+          }
+          setProposal(updatedProposal)
+        }
+        
+        // Also fetch from chain for consistency
+        fetchProposal()
+      })
+      .catch(error => {
+        console.error("Error voting:", error)
+        setVoteError(error.message || "Failed to vote. You may have already voted.")
+      })
+      .finally(() => {
+        setIsVoting(false)
+      })
   }
 
-  const handleFinalize = async () => {
+  const handleFinalize = () => {
     if (!isConnected || !contract || !proposal || !isGovernment || !isExpired || proposal.finalized) return
 
-    try {
-      setIsFinalizing(true)
-      setFinalizeError(null)
+    setIsFinalizing(true)
+    setFinalizeError(null)
 
-      const tx = await contract.finalizeProposal(proposalId)
-      await tx.wait()
-
-      fetchProposal() // Refresh data
-    } catch (error: any) {
-      console.error("Error finalizing proposal:", error)
-      setFinalizeError(error.message || "Failed to finalize proposal.")
-    } finally {
-      setIsFinalizing(false)
-    }
+    contract.finalizeProposal(proposalId)
+      .then(tx => tx.wait())
+      .then(() => {
+        fetchProposal() // Refresh data
+      })
+      .catch(error => {
+        console.error("Error finalizing proposal:", error)
+        setFinalizeError(error.message || "Failed to finalize proposal.")
+      })
+      .finally(() => {
+        setIsFinalizing(false)
+      })
   }
-
-  // For demo purposes, if no contract is available, show sample data
-  useEffect(() => {
-    if (!contract && isLoading) {
-      // Sample data for demonstration
-      const sampleProposal: Proposal = {
-        id: proposalId,
-        title: "City Park Renovation Project",
-        description:
-          "Proposal to renovate the central city park with new playground equipment, walking paths, and landscaping to create a more accessible and enjoyable space for all residents.\n\nThe renovation will include:\n\n- New playground equipment suitable for children of all abilities\n- Expanded walking paths with improved accessibility\n- Additional seating areas and picnic facilities\n- Native plant landscaping to support local wildlife\n- Improved lighting for evening safety\n- Water-efficient irrigation systems\n\nThis project aims to create a more inclusive community space that can be enjoyed by residents of all ages and abilities. The renovated park will provide recreational opportunities, promote physical activity, and serve as a gathering place for community events.",
-        category: "Environment",
-        deadline: Math.floor(Date.now() / 1000) + 86400 * 3, // 3 days from now
-        upvotes: 156,
-        downvotes: 23,
-        finalized: false,
-        proposer: "0x1234567890123456789012345678901234567890",
-      }
-
-      setProposal(sampleProposal)
-      setIsLoading(false)
-    }
-  }, [contract, isLoading, proposalId])
 
   const getCategoryIcon = (category: string) => {
     switch (category?.toLowerCase()) {
@@ -187,9 +242,9 @@ export default async function ProposalDetailPage() {
       year: "numeric",
       month: "long",
       day: "numeric",
-    })
-  }
-
+    });
+  };
+  const PROPOSAL_DURATION = 7 * 24 * 60 * 60;
   return (
     <div className="container py-8">
       <Button variant="ghost" asChild className="mb-6 flex items-center gap-2">
@@ -244,12 +299,12 @@ export default async function ProposalDetailPage() {
             <div className="mb-8 grid gap-4 sm:grid-cols-2">
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Calendar className="h-4 w-4" />
-                <span>Created: {formatDate(proposal.deadline - 604800)}</span>
-              </div>
+                <span>Created: {new Date((proposal.deadline - 604800) * 1000).toLocaleString()}</span>
+                </div>
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <User className="h-4 w-4" />
                 <span>
-                  Proposer: {proposal.proposer.slice(0, 6)}...{proposal.proposer.slice(-4)}
+                  Proposer: {proposal.proposer ? proposal.proposer : proposal.proposer}
                 </span>
               </div>
             </div>

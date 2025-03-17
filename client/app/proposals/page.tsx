@@ -27,6 +27,7 @@ export default function ProposalsPage() {
     const [filteredProposals, setFilteredProposals] = useState<Proposal[]>([])
     const [isLoading, setIsLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)
+    const [count, setCount] = useState(0)
     const [filters, setFilters] = useState({
         search: "",
         category: "All Categories",
@@ -37,11 +38,13 @@ export default function ProposalsPage() {
 
     async function initializeContract() {
         const contractInstance = await getContract();
+        const c= await contractInstance.proposalCount();
+        setCount(c);
         setContract(contractInstance);
     }
 
     const fetchProposals = async () => {
-        const totalProposals = 5; // Change this to the actual count
+        const totalProposals =count ; // Change this to the actual count
         const proposals: Proposal[] = [];
         for (let id = 1; id <= totalProposals; id++) {
           try {
@@ -202,17 +205,14 @@ export default function ProposalsPage() {
                 </div>
             ) : (
                 <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+
                     {filteredProposals.map((proposal) => (
                         <ProposalCard key={proposal.id} proposal={proposal} />
                     ))}
+                    
                 </div>
             )}
-            <div>
-                <h2>Proposals</h2>
-                {proposals.map((proposal) => (
-                    <p key={proposal.id}>{proposal.title}</p>
-                ))}
-            </div>
+
         </div>
     )
 }
