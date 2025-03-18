@@ -327,7 +327,7 @@ export default function ProposalDetailPage() {
                   {!proposal.finalized && <CountdownTimer deadline={proposal.deadline} />}
 
                   <div>
-                    <h3 className="mb-2 font-semibold">Voting Results</h3>
+                    <h3 className="mb-2 font-semibold">Voting Results </h3>
                     <VotingProgress upvotes={proposal.upvotes} downvotes={proposal.downvotes} />
                   </div>
 

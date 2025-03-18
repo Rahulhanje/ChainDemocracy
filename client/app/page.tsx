@@ -55,7 +55,7 @@ export default function Home() {
         <div className="absolute -top-24 -left-24 h-96 w-96 rounded-full bg-purple-500/10 blur-3xl" />
         <div className="absolute -bottom-24 -right-24 h-96 w-96 rounded-full bg-purple-500/10 blur-3xl" />
       </section>
-
+       
       {/* Features Section */}
       <section className="py-20">
         <div className="container">

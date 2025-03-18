@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { Home, FileText, BarChart2, Wallet, LogOut, Menu, X } from "lucide-react"
+import { Home, FileText, BarChart2, Wallet, LogOut, Menu, X, UsersRound, Workflow } from "lucide-react"
 import { useState } from "react"
 import { cn } from "@/lib/utils"
 import { useWallet } from "@/hooks/WalletContext"
@@ -24,6 +24,16 @@ const navItems = [
     href: "/dashboard",
     icon: BarChart2,
   },
+  {
+    name: "About Us",
+    href: "/about",
+    icon: UsersRound
+  },
+  {
+    name:"How It Works",
+    href: "/howitwork",
+    icon: Workflow 
+  }
 ]
 
 export function Navbar() {
